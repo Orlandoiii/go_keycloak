@@ -2,7 +2,6 @@ package custom_jwt
 
 import "github.com/golang-jwt/jwt/v5"
 
-// DecodedAccessTokenHeader is the decoded header from the access token
 type DecodedAccessTokenHeader struct {
 	Alg string `json:"alg"`
 	Typ string `json:"typ"`
