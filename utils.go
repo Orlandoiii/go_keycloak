@@ -2,6 +2,7 @@ package go_keycloak
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/opentracing/opentracing-go"
 )
@@ -148,4 +149,8 @@ func NilOrEmptySlice(value *[]string) bool {
 // WithTracer generates a context that has a tracer attached
 func WithTracer(ctx context.Context, tracer opentracing.Tracer) context.Context {
 	return context.WithValue(ctx, tracerContextKey, tracer)
+}
+
+func WrapError(message string, err error) error {
+	return fmt.Errorf("%s %w", message, err)
 }

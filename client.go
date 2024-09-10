@@ -11,11 +11,13 @@ import (
 	"sync"
 	"time"
 
+	"errors"
+
+	"github.com/Orlandoiii/go_keycloak/custom_error"
 	jwx "github.com/Orlandoiii/go_keycloak/custom_jwt"
 	"github.com/go-resty/resty/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/opentracing/opentracing-go"
-	"github.com/pkg/errors"
 	"github.com/segmentio/ksuid"
 )
 
@@ -103,7 +105,7 @@ func checkForError(resp *resty.Response, err error, errMessage string) error {
 	if err != nil {
 		return &APIError{
 			Code:    0,
-			Message: errors.Wrap(err, errMessage).Error(),
+			Message: custom_error.WrapError(errMessage, err).Error(),
 			Type:    ParseAPIErrType(err),
 		}
 	}
@@ -365,7 +367,7 @@ func (g *GoCloak) GetCerts(ctx context.Context, realm string) (*CertResponse, er
 
 	cert, err := g.getNewCerts(ctx, realm)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 
 	g.certsCache.Store(realm, cert)
@@ -418,19 +420,19 @@ func (g *GoCloak) decodeAccessTokenWithClaims(ctx context.Context, accessToken, 
 
 	decodedHeader, err := jwx.DecodeAccessTokenHeader(accessToken)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 
 	certResult, err := g.GetCerts(ctx, realm)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 	if certResult.Keys == nil {
-		return nil, errors.Wrap(errors.New("there is no keys to decode the token"), errMessage)
+		return nil, custom_error.WrapError(errMessage, errors.New("there is no keys to decode the token"))
 	}
 	usedKey := findUsedKey(decodedHeader.Kid, *certResult.Keys)
 	if usedKey == nil {
-		return nil, errors.Wrap(errors.New("cannot find a key to decode the token"), errMessage)
+		return nil, custom_error.WrapError(errMessage, errors.New("cannot find a key to decode the token"))
 	}
 
 	if strings.HasPrefix(decodedHeader.Alg, "ES") {
@@ -438,7 +440,7 @@ func (g *GoCloak) decodeAccessTokenWithClaims(ctx context.Context, accessToken, 
 	} else if strings.HasPrefix(decodedHeader.Alg, "RS") {
 		return jwx.DecodeAccessTokenRSACustomClaims(accessToken, usedKey.E, usedKey.N, claims)
 	}
-	return nil, fmt.Errorf("unsupported algorithm")
+	return nil, custom_error.WrapError(errMessage, fmt.Errorf("unsupported algorithm"))
 }
 
 // DecodeAccessToken decodes the accessToken
@@ -697,7 +699,7 @@ func (g *GoCloak) ExecuteActionsEmail(ctx context.Context, token, realm string, 
 
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return errors.Wrap(err, errMessage)
+		return custom_error.WrapError(errMessage, err)
 	}
 
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
@@ -857,7 +859,7 @@ func (g *GoCloak) UpdateGroup(ctx context.Context, token, realm string, updatedG
 	const errMessage = "could not update group"
 
 	if NilOrEmpty(updatedGroup.ID) {
-		return errors.Wrap(errors.New("ID of a group required"), errMessage)
+		return custom_error.WrapError(errMessage, errors.New("ID of a group required"))
 	}
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
 		SetBody(updatedGroup).
@@ -889,7 +891,7 @@ func (g *GoCloak) UpdateClient(ctx context.Context, token, realm string, updated
 	const errMessage = "could not update client"
 
 	if NilOrEmpty(updatedClient.ID) {
-		return errors.Wrap(errors.New("ID of a client required"), errMessage)
+		return custom_error.WrapError(errMessage, errors.New("ID of a client required"))
 	}
 
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
@@ -904,7 +906,7 @@ func (g *GoCloak) UpdateClientRepresentation(ctx context.Context, accessToken, r
 	const errMessage = "could not update client representation"
 
 	if NilOrEmpty(updatedClient.ID) {
-		return nil, errors.Wrap(errors.New("ID of a client required"), errMessage)
+		return nil, custom_error.WrapError(errMessage, errors.New("ID of a client required"))
 	}
 
 	var result Client
@@ -1458,7 +1460,7 @@ func (g *GoCloak) GetClientOfflineSessions(ctx context.Context, token, realm, id
 
 		queryParams, err = GetQueryParams(params[0])
 		if err != nil {
-			return nil, errors.Wrap(err, errMessage)
+			return nil, custom_error.WrapError(errMessage, err)
 		}
 	}
 
@@ -1485,7 +1487,7 @@ func (g *GoCloak) GetClientUserSessions(ctx context.Context, token, realm, idOfC
 
 		queryParams, err = GetQueryParams(params[0])
 		if err != nil {
-			return nil, errors.Wrap(err, errMessage)
+			return nil, custom_error.WrapError(errMessage, err)
 		}
 	}
 
@@ -1576,7 +1578,7 @@ func (g *GoCloak) GetComponentsWithParams(ctx context.Context, token, realm stri
 
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
 		SetResult(&result).
@@ -1722,7 +1724,7 @@ func (g *GoCloak) GetGroups(ctx context.Context, token, realm string, params Get
 	var result []*Group
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
@@ -1793,7 +1795,7 @@ func (g *GoCloak) GetGroupsCount(ctx context.Context, token, realm string, param
 	var result GroupsCount
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return 0, errors.Wrap(err, errMessage)
+		return 0, custom_error.WrapError(errMessage, err)
 	}
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
 		SetResult(&result).
@@ -1801,7 +1803,7 @@ func (g *GoCloak) GetGroupsCount(ctx context.Context, token, realm string, param
 		Get(g.getAdminRealmURL(realm, "groups", "count"))
 
 	if err := checkForError(resp, err, errMessage); err != nil {
-		return -1, errors.Wrap(err, errMessage)
+		return -1, custom_error.WrapError(errMessage, err)
 	}
 
 	return result.Count, nil
@@ -1814,7 +1816,7 @@ func (g *GoCloak) GetGroupMembers(ctx context.Context, token, realm, groupID str
 	var result []*User
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
@@ -1836,7 +1838,7 @@ func (g *GoCloak) GetClientRoles(ctx context.Context, token, realm, idOfClient s
 	var result []*Role
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
@@ -2002,7 +2004,7 @@ func (g *GoCloak) GetClients(ctx context.Context, token, realm string, params Ge
 	var result []*Client
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
 		SetResult(&result).
@@ -2102,7 +2104,7 @@ func (g *GoCloak) GetRealmRoles(ctx context.Context, token, realm string, params
 	var result []*Role
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
@@ -2608,7 +2610,7 @@ func (g *GoCloak) GetUserByID(ctx context.Context, accessToken, realm, userID st
 	const errMessage = "could not get user by id"
 
 	if userID == "" {
-		return nil, errors.Wrap(errors.New("userID shall not be empty"), errMessage)
+		return nil, custom_error.WrapError(errMessage, errors.New("userID shall not be empty"))
 	}
 
 	var result User
@@ -2630,7 +2632,7 @@ func (g *GoCloak) GetUserCount(ctx context.Context, token string, realm string, 
 	var result int
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return 0, errors.Wrap(err, errMessage)
+		return 0, custom_error.WrapError(errMessage, err)
 	}
 
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
@@ -2639,7 +2641,7 @@ func (g *GoCloak) GetUserCount(ctx context.Context, token string, realm string, 
 		Get(g.getAdminRealmURL(realm, "users", "count"))
 
 	if err := checkForError(resp, err, errMessage); err != nil {
-		return -1, errors.Wrap(err, errMessage)
+		return -1, custom_error.WrapError(errMessage, err)
 	}
 
 	return result, nil
@@ -2652,7 +2654,7 @@ func (g *GoCloak) GetUserGroups(ctx context.Context, token, realm, userID string
 	var result []*Group
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
@@ -2674,7 +2676,7 @@ func (g *GoCloak) GetUsers(ctx context.Context, token, realm string, params GetU
 	var result []*User
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
@@ -2696,7 +2698,7 @@ func (g *GoCloak) GetUsersByRoleName(ctx context.Context, token, realm, roleName
 	var result []*User
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 
 	resp, err := g.GetRequestWithBearerAuth(ctx, token).
@@ -3480,7 +3482,7 @@ func (g *GoCloak) GetPolicies(ctx context.Context, token, realm, idOfClient stri
 
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 
 	path := []string{"clients", idOfClient, "authz", "resource-server", "policy"}
@@ -3741,7 +3743,7 @@ func (g *GoCloak) GetPermissions(ctx context.Context, token, realm, idOfClient s
 
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 
 	path := []string{"clients", idOfClient, "authz", "resource-server", "permission"}
@@ -4071,7 +4073,7 @@ func (g *GoCloak) GetEvents(ctx context.Context, token string, realm string, par
 
 	queryParams, err := GetQueryParams(params)
 	if err != nil {
-		return nil, errors.Wrap(err, errMessage)
+		return nil, custom_error.WrapError(errMessage, err)
 	}
 
 	var result []*EventRepresentation
